@@ -67,17 +67,17 @@ namespace detail {
             { r.param(mit) } -> same_as<void>;
         };
 
-    template<typename T, typename Enabled>
+    template<class T, class Enabled>
     struct enable_if_seed_sequence_impl {};
 
-    template<seed_sequence T, typename Enabled>
+    template<seed_sequence T, class Enabled>
     struct enable_if_seed_sequence_impl<T, Enabled> { using type = Enabled; };
 
-    template<typename T, typename Enabled = void> using enable_if_seed_sequence = typename enable_if_seed_sequence_impl<T, Enabled>::type;
+    template<class T, class Enabled = void> using enable_if_seed_sequence = typename enable_if_seed_sequence_impl<T, Enabled>::type;
 #else
-    template<bool B, typename Enabled = void> struct enable_if { };
-    template<typename Enabled> struct enable_if<true, Enabled> { using type = Enabled; };
-    template<typename...> using void_t = void;
+    template<bool B, class Enabled = void> struct enable_if { };
+    template<class Enabled> struct enable_if<true, Enabled> { using type = Enabled; };
+    template<class...> using void_t = void;
 
     template<
         class S,
@@ -102,7 +102,7 @@ namespace detail {
     template<class>
     static bool_constant<false> test(...);
 
-    template<typename T, typename Enabled = void> using enable_if_seed_sequence = typename enable_if<decltype(test<T>(0))::value, Enabled>::type;
+    template<class T, class Enabled = void> using enable_if_seed_sequence = typename enable_if<decltype(test<T>(0))::value, Enabled>::type;
 #endif
 #endif
 
@@ -114,7 +114,7 @@ struct mersenne_twister_state {
 
     static constexpr size_t state_size = n;
 
-    // Invariants: Each X[i] will have at most "word_size"/w bits (i.e., X[i] >> w == 0)
+    // Invariants: Each X[i] will have at most "word_size"/w bits (i.e., `(X[i] >> w) == 0u`)
     //             i < n
     result_type X[state_size];
     size_t i;
@@ -142,17 +142,14 @@ struct mersenne_twister_state {
 #endif
 
     template<class OStream>
-    friend typename OStream::basic_ostream& operator<<(OStream& os_, const mersenne_twister_state& x) {
-        using basic_ostream = typename OStream::basic_ostream;
-        using ios_base = typename basic_ostream::ios_base;
-        basic_ostream& os = os_;
+    friend OStream& operator<<(OStream& os, const mersenne_twister_state& x) {
         const auto flags(os.flags());
-        const auto fill(os.fill());
+        auto fill(os.fill());
         const auto space(os.widen(' '));
-        os.flags(ios_base::dec | ios_base::fixed | ios_base::left);
+        os.flags(OStream::dec | OStream::fixed | OStream::left);
         os.fill(space);
 
-        for (const auto& x_i : x.X) {
+        for (const result_type& x_i : x.X) {
             os << x_i;
             os << space;
         }
@@ -164,14 +161,11 @@ struct mersenne_twister_state {
     }
 
     template<class IStream>
-    friend typename IStream::basic_istream& operator>>(IStream& is_, mersenne_twister_state& x) {
-        using basic_istream = typename IStream::basic_istream;
-        using ios_base = typename basic_istream::ios_base;
-        basic_istream& is = is_;
+    friend IStream& operator>>(IStream& is, mersenne_twister_state& x) {
         const auto flags(is.flags());
-        is.flags(ios_base::dec | ios_base::skipws);
+        is.flags(IStream::dec | IStream::skipws);
 
-        for (auto& x_i : x.X) {
+        for (result_type& x_i : x.X) {
             is >> x_i;
         }
         is >> x.i;
@@ -186,7 +180,8 @@ struct mersenne_twister_engine : public mersenne_twister_state<UIntType, n> {
     using result_type = UIntType;
     static_assert(static_cast<result_type>(-1) >= result_type{0}, "result_type must be unsigned");
     using state_type = mersenne_twister_state<UIntType, n>;
-    using state_type::X, state_type::i;
+    using state_type::X;
+    using state_type::i;
 
     static constexpr size_t word_size = w;
     using state_type::state_size;
@@ -203,13 +198,15 @@ struct mersenne_twister_engine : public mersenne_twister_state<UIntType, n> {
     static constexpr UIntType initialization_multiplier = f;
     static constexpr result_type min() noexcept { return result_type{0u}; }
     static constexpr result_type max() noexcept { return max_value; }
-    static constexpr result_type default_seed{5489u};
+
 private:
     static constexpr size_t result_type_bits = detail::bits_in_type<result_type>();
     static_assert(word_size <= result_type_bits, "result_type is too small for word_size bits");
     static constexpr result_type max_value{ (~result_type{0}) >> (result_type_bits - w) };
 
 public:
+    static constexpr result_type default_seed{ static_cast<result_type>(5489u) & max() };
+
     static_assert(0 < shift_size, "shift_size cannot be 0");
     static_assert(shift_size <= state_size, "shift_size not in range (replace with shift_size%state_size)");
     static_assert(2u < word_size, "word_size is too small (cannot be 0, 1 or 2)");
@@ -232,6 +229,7 @@ public:
     // Disable implicit mersenne_twister_engine<UIntType, w, <different parameters>> -> state_type converting constructor
     template<class UIntType2, size_t w2, size_t n2, size_t m2, size_t r2, UIntType a2, size_t u2, UIntType d2, size_t s2, UIntType b2, size_t t2, UIntType c2, size_t l2, UIntType f2>
     mersenne_twister_engine(const mersenne_twister_engine<UIntType2, w2, n2, m2, r2, a2, u2, d2, s2, b2, t2, c2, l2, f2>&) = delete;
+    // Except if only the UIntType is different (e.g., `mt19937<unsigned>` -> `mt19937<unsigned long>`
     template<class UIntType2>
 #if __cpp_constexpr >= 201304L
     constexpr
@@ -386,6 +384,7 @@ public:
 #endif
     result_type operator()() noexcept {
         result_type z = scramble(X[i]);
+        // transition_algorithm is O(state_size), but it is run every state_size calls to operator()
         if (++i == state_size) [[unlikely]] {
             transition_algorithm();
             i = 0;
@@ -393,7 +392,7 @@ public:
         return z;
     }
 private:
-    template<class InputIt, typename Sentinel>
+    template<class InputIt, class Sentinel>
 #if __cpp_constexpr >= 201304L
     constexpr
 #endif
@@ -427,7 +426,7 @@ public:
      *   }
      * But more efficient in terms of code generation (less unnecessary checks)
      */
-    template<class InputIt, typename Sentinel = InputIt>
+    template<class InputIt, class Sentinel = InputIt>
 #if __cpp_constexpr >= 201304L
     constexpr
 #endif
@@ -443,7 +442,7 @@ public:
 #endif
     result_type peek(unsigned long long distance = 0) const noexcept {
         if (distance != 0 && (distance >= n - i)) {
-            auto copy = *this;
+            mersenne_twister_engine copy = *this;
             copy.discard(distance-1u);
             return scramble(copy.X[copy.i]);
         }
@@ -457,7 +456,7 @@ public:
     InputIt peek(InputIt first, Sentinel last, unsigned long distance = 0) const noexcept(noexcept(generate_multiple(first, last))) {
         // Ensure that the sequence written isn't tainted if the iterated object's functions
         // (like operator==, operator* or operator= on the iterated objects) mutate *this
-        auto copy = *this;
+        mersenne_twister_engine copy = *this;
         copy.discard(distance);
         if (first == last) return first;
         for (size_t i = copy->i; i < state_size; ++i) {
@@ -494,12 +493,12 @@ public:
     }
 
     template<class OStream>
-    friend typename OStream::basic_ostream& operator<<(OStream& os, const mersenne_twister_engine& x) {
+    friend OStream& operator<<(OStream& os, const mersenne_twister_engine& x) {
         return os << static_cast<const state_type&>(x);
     }
 
     template<class IStream>
-    friend typename IStream::basic_istream& operator>>(IStream& is, mersenne_twister_engine& x) {
+    friend IStream& operator>>(IStream& is, mersenne_twister_engine& x) {
         IStream& result = is >> static_cast<state_type&>(x);
         if (x.i == state_size) {
             // libstdc++ sets i to state_size instead of immediately transitioning and setting i to 0
@@ -523,22 +522,34 @@ public:
 #endif
     detail::enable_if_seed_sequence<Sseq> seed(Sseq& seq) noexcept(noexcept(seq.generate(static_cast<detail::uint_least32_t*>(nullptr), static_cast<detail::uint_least32_t*>(nullptr)))) {
         constexpr size_t k = w % 32u == 0u ? w / 32u : (w / 32u) + 1u;
-        detail::uint_least32_t A[n * k]
+        // Limit to these specific integer types since there is
+        // no way to check for extended integer types
+        if (k == 1u && (result_type_bits >= 32u) && (
+                detail::is_same<UIntType, unsigned char>::value ||
+                detail::is_same<UIntType, unsigned short>::value ||
+                detail::is_same<UIntType, unsigned>::value ||
+                detail::is_same<UIntType, unsigned long>::value ||
+                detail::is_same<UIntType, unsigned long long>::value)) {
+            // Directly use seed sequence
+            seq.generate(X + 0, X + n*k);
+        } else {
+            detail::uint_least32_t A[n * k]
 #if __cpp_constexpr >= 201907L
-            // No initialisation needed
+                // No initialisation needed
 #else
-            {}
+                {}
 #endif
-        ;
-        seq.generate(A + 0, A + n*k);
-        const detail::uint_least32_t* p = A;
+            ;
+            seq.generate(A + 0, A + n*k);
+            const detail::uint_least32_t* p = A;
 
-        for (result_type& x : X) {
-            x = min();
-            for (size_t j = 0; j < k; ++j) {
-                x |= static_cast<result_type>(*p++) << (32u * j);
+            for (result_type& x : X) {
+                x = min();
+                for (size_t j = 0; j < k; ++j) {
+                    x |= static_cast<result_type>(*p++) << (32u * j);
+                }
+                x &= max();
             }
-            x &= max();
         }
 
         if (rshift<r>(X[0]) == min()) {
@@ -558,7 +569,9 @@ public:
         transition_algorithm();
         i = 0;
     }
+
 #endif
+
 };
 
 template<class UInt32 = unsigned>
