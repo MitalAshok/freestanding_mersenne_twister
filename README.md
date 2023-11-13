@@ -21,10 +21,11 @@ using mt19937_64 = freestanding_mersenne_twister::mt19937_64<>;
    replaced with manipulating `state()`. These were implementation defined to begin with,
    but you *should* still be able to use it with libstdc++'s `std::mersene_twister_engine<...>`.
  * All functions (except `operator>>`/`operator<<`) are now `constexpr` in C++14 and up.
- * `mt19937<>` is a template alias that uses `unsigned` by default. The standard
-   library version would be `mt19937<std::uint_fast32_t>`. The standard version is
+ * `mt19937<>` is a template alias with some at-least 32 bit integer type by default.
+   The standard library version would be `mt19937<std::uint_fast32_t>`, which is
    grossly inefficient if `uint_fast32_t` is 64 bit since the state array would double in size.
- * Similar for `mt19937_64<>`, with `unsigned long long` instead of `std::uint_fast64_t`.
+ * Similar for `mt19937_64<>`, with some at-least 64 bit integer type instead of
+   `std::uint_fast64_t`.
 
 ## API
 
@@ -36,12 +37,12 @@ namespace freestanding_mersenne_twister {
 template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
 struct mersenne_twister_engine;
 
-template<class UInt32 = unsigned>
+template<class UInt32 = /* smallest 32+ bit type out of unsigned short, unsigned and unsigned long */>
 using mt19937 =
         mersenne_twister_engine<UInt32, 32, 624, 397, 31,
                 0x9908'b0dfu, 11, 0xffff'ffffu, 7, 0x9d2c'5680u, 15, 0xefc6'0000u, 18, 1'812'433'253u>;
 
-template<class UInt64 = unsigned long long>
+template<class UInt64 = /* smallest 64+ bit type out of unsigned short, unsigned, unsigned long and unsigned long long */>
 using mt19937_64 =
         mersenne_twister_engine<UInt64, 64, 312, 156, 31,
                 0xb502'6f5a'a966'19e9u, 29, 0x5555'5555'5555'5555u, 17,
@@ -255,7 +256,7 @@ that work the same as there corresponding versions in `mersenne_twister_engine`.
 ## Example
 
 ```c++
-using mt19937 = freestanding_mersenne_twister::mt19937<unsigned long>;
+using mt19937 = freestanding_mersenne_twister::mt19937<>;
 using mt19937_64 = freestanding_mersenne_twister::mt19937_64<>;
 static_assert(mt19937{}.peek(10000) == 4123659995u);
 static_assert(mt19937_64{}.peek(10000) == 9981545732273789042u);

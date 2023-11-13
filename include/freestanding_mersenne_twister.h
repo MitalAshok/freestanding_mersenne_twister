@@ -1,5 +1,5 @@
 #ifndef FREESTANDING_MERSENNE_TWISTER_H
-#define FREESTANDING_MERSENNE_TWISTER_H 1'00
+#define FREESTANDING_MERSENNE_TWISTER_H 1'01
 
 namespace freestanding_mersenne_twister {
 
@@ -35,16 +35,24 @@ namespace detail {
             (static_cast<T>(-1) > T(0)) && (static_cast<unsigned long>(static_cast<T>(0xffff'ffffu)) == 0xffff'ffffu);
     }
 
+    template<class T>
+    constexpr bool is_unsigned_integer_of_at_least_64_bits() noexcept {
+        return is_unsigned_integer_of_at_least_32_bits<T>() && (static_cast<unsigned long long>(static_cast<T>(0xffff'ffff'ffff'ffffu)) == 0xffff'ffff'ffff'ffffu);
+    }
+
     template<bool B, class IfTrue, class IfFalse> struct conditional { using type = IfFalse; };
     template<class IfTrue, class IfFalse> struct conditional<true, IfTrue, IfFalse> { using type = IfTrue; };
 
-    template<class... Candidates>
-    struct smallest_32_bit_type { using type = unsigned long; };
-
+    template<class... Candidates> struct smallest_32_bit_type { using type = unsigned long; };
     template<class Candidate, class... Candidates>
     struct smallest_32_bit_type<Candidate, Candidates...> : conditional<is_unsigned_integer_of_at_least_32_bits<Candidate>(), Candidate, typename smallest_32_bit_type<Candidates...>::type> {};
 
-    using uint_least32_t = smallest_32_bit_type<unsigned short, unsigned>;
+    template<class... Candidates> struct smallest_64_bit_type { using type = unsigned long long; };
+    template<class Candidate, class... Candidates>
+    struct smallest_64_bit_type<Candidate, Candidates...> : conditional<is_unsigned_integer_of_at_least_64_bits<Candidate>(), Candidate, typename smallest_64_bit_type<Candidates...>::type> {};
+
+    using uint_least32_t = typename smallest_32_bit_type<unsigned short, unsigned>::type;
+    using uint_least64_t = typename smallest_64_bit_type<unsigned short, unsigned, unsigned long>::type;
 
     template<class T, class U> struct is_same : bool_constant<false> {};
     template<class T> struct is_same<T, T> : bool_constant<true> {};
@@ -574,21 +582,56 @@ public:
 
 };
 
-template<class UInt32 = unsigned>
+#if __cpp_inline_variables < 201606L
+template<class UIntType, size_t n>
+constexpr size_t mersenne_twister_state<UIntType, n>::state_size;
+
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::word_size;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::shift_size;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::mask_bits;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr UIntType mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::xor_mask;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_u;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr UIntType mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_d;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_s;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr UIntType mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_b;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_t;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr UIntType mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_c;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr size_t mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::tempering_l;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr UIntType mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::initialization_multiplier;
+template<class UIntType, size_t w, size_t n, size_t m, size_t r, UIntType a, size_t u, UIntType d, size_t s, UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+constexpr UIntType mersenne_twister_engine<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::default_seed;
+#endif
+
+template<class UInt32 = detail::uint_least32_t>
 using mt19937 =
         mersenne_twister_engine<UInt32, 32, 624, 397, 31,
                 0x9908'b0dfu, 11, 0xffff'ffffu, 7, 0x9d2c'5680u, 15, 0xefc6'0000u, 18, 1'812'433'253u>;
 
-template<class UInt64 = unsigned long long>
+template<class UInt64 = detail::uint_least64_t>
 using mt19937_64 =
         mersenne_twister_engine<UInt64, 64, 312, 156, 31,
                 0xb502'6f5a'a966'19e9u, 29, 0x5555'5555'5555'5555u, 17,
                 0x71d6'7fff'eda6'0000u, 37, 0xfff7'eee0'0000'0000u, 43, 6'364'136'223'846'793'005u>;
 
 #ifdef FREESTANDING_MERSENNE_TWISTER_SELF_TEST
-// (unsigned could be 16 bit. unsigned long guaranteed to be 32 bit)
-static_assert(mt19937<unsigned long>{}.peek(10000) == 4123659995u);
-static_assert(mt19937_64<>{}.peek(10000) == 9981545732273789042u);
+#if __cpp_constexpr >= 201304L
+static_assert(mt19937<>{}.peek(10000) == 4123659995u, "Did not pass self test");
+static_assert(mt19937_64<>{}.peek(10000) == 9981545732273789042u, "Did not pass self test");
+#else
+#warning FREESTANDING_MERSENNE_TWISTER_SELF_TEST: Need C++14 and modern compiler to perform self test
+#endif
 #endif
 
 }
